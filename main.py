@@ -107,5 +107,34 @@ elif st.session_state.page == "スケジュール":
 elif st.session_state.page == "大学追加":
     st.header("大学追加")
     st.write("受験する大学や学部を追加登録します。")
-    st.info("（ここに大学を追加するフォームが表示される予定です）")
+
+    # --- 未登録の大学リストを取得 ---
+    unregistered_universities = da.get_unregistered_universities()
+
+    if not unregistered_universities:
+        st.success("全ての大学が追加済みです。")
+    else:
+        # --- 大学選択のUI ---
+        selected_university = st.selectbox(
+            "追加する大学を選択してください",
+            unregistered_universities,
+            index=None, # 初期状態では何も選択されていないようにする
+            placeholder="大学名を選択..."
+        )
+
+        # --- 追加ボタン ---
+        if st.button("この大学のタスクを追加する", type="primary"):
+            if selected_university:
+                # ログイン機能は今後のため、ログインIDを1で固定
+                login_id = 1
+                success = da.add_university_tasks_to_supabase(login_id, selected_university)
+
+                if success:
+                    st.success(f"「{selected_university}」のタスクを追加しました。タスク一覧画面で確認してください。")
+                    # 画面をリロードして、大学選択リストを更新する
+                    st.rerun()
+                else:
+                    st.error("タスクの追加に失敗しました。管理者にお問い合わせください。")
+            else:
+                st.warning("追加する大学を選択してください。")
 
