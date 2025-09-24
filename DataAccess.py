@@ -18,6 +18,37 @@ except Exception as e:
 JST = timezone(timedelta(hours=+9), 'JST')
 
 
+def get_or_create_user_login_id(email: str, name: str) -> int:
+    """
+    Emailを元にユーザーを検索し、存在しない場合は新規作成する。
+    最終的にそのユーザーのLogin IDを返す。
+    """
+    if not supabase: return 0
+    try:
+        # ユーザーをEmailで検索
+        user_res = supabase.from_('ユーザーテーブル').select('"Login ID"').eq('Email', email).single().execute()
+        
+        # ユーザーが存在する場合、Login IDを返す
+        if user_res.data:
+            return user_res.data['Login ID']
+    
+    except Exception as e:
+        # .single()はデータがない場合にPostgrestAPIErrorを発生させるため、ここでキャッチして新規作成フローに流す
+        print(f"ユーザー検索エラー（新規ユーザーの可能性）: {str(e)}")
+
+    try:
+        # ユーザーが存在しない場合、新規作成
+        new_user_res = supabase.from_('ユーザーテーブル').insert({
+            'Email': email,
+            'Name': name
+        }).select('"Login ID"').single().execute()
+        return new_user_res.data['Login ID']
+    
+    except Exception as e2:
+        print(f"ユーザー新規作成エラー: {str(e2)}")
+        return 0
+
+
 def get_tasks_by_login_id_from_supabase(login_id: int) -> pd.DataFrame:
     """
     Supabaseからデータを取得し、指定した Login ID のタスク一覧を返します。
@@ -114,19 +145,22 @@ def add_university_tasks_to_supabase(login_id: int, university_name: str) -> boo
         print(f"大学タスク追加エラー: {str(e)}")
         return False
 
-def get_unregistered_universities() -> list:
-    """タスクテーブルにまだタスクが登録されていない大学名の一覧を取得"""
+def get_unregistered_universities(login_id: int) -> list:
+    """指定されたユーザーがまだ登録していない大学名の一覧を取得"""
     if not supabase: return []
     try:
-        registered_ids_response = supabase.from_('タスクテーブル').select('"University ID"').execute()
+        # ログインユーザーが登録済みのUniversity IDを取得
+        registered_ids_response = supabase.from_('タスクテーブル').select('"University ID"').eq('"Login ID"', login_id).execute()
         registered_ids = {item['University ID'] for item in registered_ids_response.data}
 
+        # 全ての大学マスターを取得
         university_master_response = supabase.from_('大学名マスターテーブル').select('*').execute()
         university_master_df = pd.DataFrame(university_master_response.data)
         
         if university_master_df.empty:
             return []
 
+        # 未登録の大学を絞り込み
         unregistered_df = university_master_df[~university_master_df['University ID'].isin(registered_ids)]
         return unregistered_df['University Name'].tolist()
     except Exception as e:
