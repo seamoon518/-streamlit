@@ -14,7 +14,7 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_c_i4JhAt-ahbsa9mqV
 ## タスク一覧を取得する関数
 ################################
 
-def get_tasks_by_login_id_from_supabase(login_id: int) -> pd.DataFrame:
+def get_tasks_by_login_id_from_supabase() -> pd.DataFrame:
     """
     Supabaseからデータを取得し、指定した Login ID のタスク一覧を返します。
     """
@@ -23,7 +23,7 @@ def get_tasks_by_login_id_from_supabase(login_id: int) -> pd.DataFrame:
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         
         # 各テーブルからデータを取得
-        task_table_data = supabase.from_('タスクテーブル').select('*').eq('Login ID', login_id).execute()
+        task_table_data = supabase.from_('タスクテーブル').select('*').execute()
         task_master_data = supabase.from_('タスクマスターテーブル').select('*').execute()
         university_master_data = supabase.from_('大学名マスターテーブル').select('*').execute()
         due_date_master_data = supabase.from_('日付マスターテーブル').select('*').execute()
@@ -37,11 +37,6 @@ def get_tasks_by_login_id_from_supabase(login_id: int) -> pd.DataFrame:
     except Exception as e:
         print(f"データの取得中にエラーが発生しました: {e}")
         return pd.DataFrame() # エラー時は空のDataFrameを返す
-
-    # 指定された Login ID のデータがない場合は、空のデータフレームを返します
-    if user_tasks.empty:
-        print(f"Login ID {login_id} のタスクは見つかりませんでした。")
-        return pd.DataFrame(columns=['University Name', 'Task Name', 'University ID', 'Task ID', 'Due date', 'Status Flag', 'Favorite Flag'])
 
     # 各テーブルと結合して必要な情報を取得します
     # 1. 大学名マスターテーブルと結合
@@ -62,12 +57,11 @@ def get_tasks_by_login_id_from_supabase(login_id: int) -> pd.DataFrame:
 ## タスクのステータスを変更する関数
 ################################
 
-def update_task_status(login_id: int, university_id: int, task_id: int, new_status: bool) -> dict:
+def update_task_status(university_id: int, task_id: int, new_status: bool) -> dict:
     """
     タスクテーブルの指定されたタスクのStatus Flagを更新します。
 
     Args:
-        login_id (int): 更新したいタスクの Login ID。
         university_id (int): 更新したいタスクの University ID。
         task_id (int): 更新したいタスクの Task ID。
         new_status (bool): 変更後のStatus Flagの値 (True/False)。
@@ -83,14 +77,13 @@ def update_task_status(login_id: int, university_id: int, task_id: int, new_stat
         # データベースを更新
         response = supabase.from_('タスクテーブル').update(
             {'Status Flag': new_status}
-        ).eq('Login ID', login_id
         ).eq('University ID', university_id
         ).eq('Task ID', task_id
         ).execute()
 
         # 更新が成功したか確認
         if response.data:
-            print(f"タスク (Login ID: {login_id}, University ID: {university_id}, Task ID: {task_id}) のステータスを {new_status} に更新しました。")
+            print(f"タスク (University ID: {university_id}, Task ID: {task_id}) のステータスを {new_status} に更新しました。")
             return {"status": "success", "data": response.data}
         else:
             print(f"指定されたタスクが見つからないか、更新に失敗しました。")
@@ -105,12 +98,11 @@ def update_task_status(login_id: int, university_id: int, task_id: int, new_stat
 ## タスクのお気に入りを変更する関数
 ################################
 
-def update_task_status(login_id: int, university_id: int, task_id: int, new_favorite: bool) -> dict:
+def update_task_status(university_id: int, task_id: int, new_favorite: bool) -> dict:
     """
     タスクテーブルの指定されたタスクのfavorite Flagを更新します。
 
     Args:
-        login_id (int): 更新したいタスクの Login ID。
         university_id (int): 更新したいタスクの University ID。
         task_id (int): 更新したいタスクの Task ID。
         new_favorite (bool): 変更後のFavorite Flagの値 (True/False)。
@@ -126,14 +118,13 @@ def update_task_status(login_id: int, university_id: int, task_id: int, new_favo
         # データベースを更新
         response = supabase.from_('タスクテーブル').update(
             {'Favorite Flag': new_favorite}
-        ).eq('Login ID', login_id
         ).eq('University ID', university_id
         ).eq('Task ID', task_id
         ).execute()
 
         # 更新が成功したか確認
         if response.data:
-            print(f"タスク (Login ID: {login_id}, University ID: {university_id}, Task ID: {task_id}) のステータスを {new_favorite} に更新しました。")
+            print(f"タスク (University ID: {university_id}, Task ID: {task_id}) のステータスを {new_favorite} に更新しました。")
             return {"favorite": "success", "data": response.data}
         else:
             print(f"指定されたタスクが見つからないか、更新に失敗しました。")
@@ -147,12 +138,11 @@ def update_task_status(login_id: int, university_id: int, task_id: int, new_favo
 ################################
 ## タスクを新規登録する関数
 ################################
-def add_tasks_for_user(login_id: int, university_id: int) -> dict:
+def add_tasks_for_user(university_id: int) -> dict:
     """
     指定された大学の全タスクをユーザーのタスクテーブルに追加します。
 
     Args:
-        login_id (int): タスクを追加するユーザーの Login ID。
         university_id (int): タスクを追加する大学の University ID。
 
     Returns:
@@ -174,7 +164,6 @@ def add_tasks_for_user(login_id: int, university_id: int) -> dict:
         tasks_to_insert = []
         for task_id in task_ids_to_add:
             tasks_to_insert.append({
-                "Login ID": login_id,
                 "University ID": university_id,
                 "Task ID": task_id,
                 "Status Flag": False,
@@ -186,7 +175,7 @@ def add_tasks_for_user(login_id: int, university_id: int) -> dict:
 
         # 挿入が成功したか確認
         if response.data:
-            print(f"Login ID: {login_id} に University ID: {university_id} のタスクを {len(response.data)} 件追加しました。")
+            print(f"University ID: {university_id} のタスクを {len(response.data)} 件追加しました。")
             return {"status": "success", "data": response.data}
         else:
             print(f"タスクの追加に失敗しました。")

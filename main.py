@@ -1,5 +1,17 @@
 import streamlit as st
 
+import streamlit as st
+# DataAccess.pyから必要な関数をインポート
+# get_tasks_by_login_id_from_supabase, get_unregistered_universities, add_tasks_for_user
+# update_task_status (2つ目の定義はupdate_task_favoriteとして区別してインポート)
+from DataAccess import (
+    get_tasks_by_login_id_from_supabase, 
+    get_unregistered_universities, 
+    add_tasks_for_user,
+    update_task_status,
+    update_task_status as update_task_favorite # 2つ目のupdate_task_statusは別名でインポート
+)
+
 # --- 画面設定 ---
 st.set_page_config(
     page_title="大学受験出願補助アプリ",
