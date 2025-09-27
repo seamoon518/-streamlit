@@ -53,6 +53,7 @@ st.divider()
 # --- 選択されたページに応じてコンテンツを表示 ---
 if st.session_state.page == "タスク一覧":
     st.header("タスク一覧")
+    st.cache_data.clear() 
     st.write("ここでは、出願に必要なタスクを一覧で確認・管理できます。")
     
     # データをロードし、進捗状況を表示
@@ -74,8 +75,51 @@ elif st.session_state.page == "スケジュール":
     # 今後のステップで、ここにカレンダー機能を追加していきます。
     st.info("（ここにスケジュールカレンダーが表示される予定です）")
 
+# main.py の該当箇所
+
 elif st.session_state.page == "大学追加":
     st.header("大学追加")
     st.write("受験する大学や学部を追加登録します。")
-    # 今後のステップで、ここに大学追加フォームを追加していきます。
-    st.info("（ここに大学を追加するフォームが表示される予定です）")
+
+    # 1. 未登録の大学名とIDのリストを取得
+    unregistered_universities_data = get_unregistered_universities()
+    
+    if unregistered_universities_data:
+        # 選択肢として表示するための大学名リストを作成
+        university_names = [d['universityname'] for d in unregistered_universities_data]
+        
+        # 2. ドロップダウンリストを表示
+        selected_university_name = st.selectbox(
+            "追加する大学を選択してください:",
+            university_names,
+            index=None, # 初期値はなし
+            placeholder="大学名を選択..."
+        )
+
+        # 3. 追加ボタンの配置と処理
+        if selected_university_name:
+            # 選択された大学名から対応する University ID を検索
+            selected_university_id = next(
+                (d['universityid'] for d in unregistered_universities_data if d['universityname'] == selected_university_name), 
+                None
+            )
+            
+            if st.button(f"**{selected_university_name}** のタスクを追加", type="primary"):
+                
+                if selected_university_id is not None:
+                    with st.spinner(f'{selected_university_name}のタスクを登録中...'):
+                        result = add_tasks_for_user(selected_university_id)
+                    
+                    if result.get("status") == "success":
+                        st.success(f"**{selected_university_name}** の出願タスクを正常に追加しました！")
+                        # タスク一覧ページを最新の状態にするため、キャッシュをクリア
+                        st.cache_data.clear()
+                        # 成功後、タスク一覧ページに遷移
+                        st.session_state.page = "タスク一覧"
+                        st.rerun()
+                    else:
+                        st.error(f"タスクの追加に失敗しました。エラー: {result.get('error')}")
+                else:
+                    st.error("エラー：選択された大学のIDが見つかりませんでした。")
+    else:
+        st.success("すべての大学のタスクが登録済みです！")
