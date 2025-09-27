@@ -9,7 +9,6 @@ import os
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://whnoqtixmzshxxygvinu.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_c_i4JhAt-ahbsa9mqV-5cQ_fGchLncp")
 
-
 ################################
 ## タスク一覧を取得する関数
 ################################
@@ -28,6 +27,7 @@ def get_tasks_by_login_id_from_supabase() -> pd.DataFrame:
         due_date_master_data = supabase.from_('日付マスターテーブル').select('*').execute()
         
         # データをpandas DataFrameに変換
+        # DB側のカラム名が小文字であれば、Pandasも小文字で読み込みます
         user_tasks = pd.DataFrame(task_table_data.data)
         task_master = pd.DataFrame(task_master_data.data)
         university_master = pd.DataFrame(university_master_data.data)
@@ -35,18 +35,12 @@ def get_tasks_by_login_id_from_supabase() -> pd.DataFrame:
 
         # user_tasksが空の場合の早期リターン
         if user_tasks.empty:
-            # タスクテーブルにデータがない場合、必要な列名を持った空のDataFrameを作成して返す
             return pd.DataFrame(columns=[
                 '大学学部名', 'タスク名', '実施日/期日', '完了ステータス', 'お気に入り'
             ])
         
-        # 修正ポイント：列名強制小文字化 (文字列のみを対象とする)
-        user_tasks.columns = [col.lower() if isinstance(col, str) else col for col in user_tasks.columns]
-        task_master.columns = [col.lower() if isinstance(col, str) else col for col in task_master.columns]
-        university_master.columns = [col.lower() if isinstance(col, str) else col for col in university_master.columns]
-        due_date_master.columns = [col.lower() if isinstance(col, str) else col for col in due_date_master.columns]
-
-
+        # すべてのカラムが小文字であることを前提とし、変換処理は削除
+        
     except Exception as e:
         print(f"データの取得中にエラーが発生しました: {e}")
         return pd.DataFrame() # エラー時は空のDataFrameを返す
@@ -59,10 +53,10 @@ def get_tasks_by_login_id_from_supabase() -> pd.DataFrame:
     df = pd.merge(df, task_master, on='taskid', how='left')
 
     # 3. 日付マスターテーブルと結合
+    # DB側で日付マスターテーブルの主キーも小文字 (universityid, taskid) になっていることを前提とします
     df = pd.merge(df, due_date_master, on=['universityid', 'taskid'], how='left')
 
-    # 必要な列だけを抽出して新しいデータフレームを作成します
-    # universityid, taskid を除外し、5つの表示列に絞り込む
+    # 必要な列だけを抽出します
     result_df = df[['universityname', 'taskname', 'duedate', 'statusflag', 'favoriteflag']]
 
     # DataFrameの列名を日本語化
@@ -76,13 +70,13 @@ def get_tasks_by_login_id_from_supabase() -> pd.DataFrame:
 def update_task_status(university_id: int, task_id: int, new_status: bool) -> dict:
     """
     タスクテーブルの指定されたタスクのStatus Flagを更新します。
-    # (中略)
     """
     try:
         # Supabaseクライアントを初期化
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         
         # データベースを更新
+        # カラム名が小文字であることを前提
         response = supabase.from_('タスクテーブル').update(
             {'statusflag': new_status}
         ).eq('universityid', university_id
@@ -108,13 +102,13 @@ def update_task_status(university_id: int, task_id: int, new_status: bool) -> di
 def update_favorite_status(university_id: int, task_id: int, new_favorite: bool) -> dict:
     """
     タスクテーブルの指定されたタスクのfavorite Flagを更新します。
-    # (中略)
     """
     try:
         # Supabaseクライアントを初期化
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         
         # データベースを更新
+        # カラム名が小文字であることを前提
         response = supabase.from_('タスクテーブル').update(
             {'favoriteflag': new_favorite}
         ).eq('universityid', university_id
@@ -140,13 +134,13 @@ def update_favorite_status(university_id: int, task_id: int, new_favorite: bool)
 def add_tasks_for_user(university_id: int) -> dict:
     """
     指定された大学の全タスクをユーザーのタスクテーブルに追加します。
-    # (中略)
     """
     try:
         # Supabaseクライアントを初期化
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         
         # 1. タスクマスターテーブルから全てのTask IDを取得
+        # カラム名が小文字であることを前提
         task_master_data = supabase.from_('タスクマスターテーブル').select('taskid').execute()
         if not task_master_data.data:
             return {"status": "failure", "error": "タスクマスターテーブルにデータがありません。"}
@@ -154,6 +148,7 @@ def add_tasks_for_user(university_id: int) -> dict:
         task_ids_to_add = [task['taskid'] for task in task_master_data.data]
 
         # 2. タスクテーブルに挿入するデータを準備
+        # カラム名が小文字であることを前提
         tasks_to_insert = []
         for task_id in task_ids_to_add:
             tasks_to_insert.append({
@@ -187,10 +182,6 @@ def add_tasks_for_user(university_id: int) -> dict:
 def get_unregistered_universities() -> list:
     """
     タスクテーブルにまだタスクが登録されていない大学名とIDの一覧を取得します。
-
-    Returns:
-        list: 未登録の大学の辞書リスト。例: [{'universityid': 101, 'universityname': '東京大学'}, ...]
-              エラーが発生した場合は空のリストを返します。
     """
     try:
         # Supabaseクライアントを初期化
@@ -202,6 +193,8 @@ def get_unregistered_universities() -> list:
 
         # 2. 大学名マスターテーブルの全データを取得
         university_master_response = supabase.from_('大学名マスターテーブル').select('universityid, universityname').execute()
+
+        # .dataからDataFrameを作成
         university_master_df = pd.DataFrame(university_master_response.data)
 
         # 3. 登録済みIDのセットを作成して比較を効率化
@@ -213,17 +206,17 @@ def get_unregistered_universities() -> list:
         ]
         
         # 5. 未登録の大学名リストを抽出して返す
-        # IDと名前の列を抽出し、辞書のリストとして返す
         unregistered_list = unregistered_universities_df[['universityid', 'universityname']].to_dict('records')
-
-        # 修正：unregistered_list を使用してチェックとリターンを行う
+        
+        # 戻り値のチェック
         if not unregistered_list:
             print("未登録の大学は見つかりませんでした。")
-        else:
-            print(f"未登録の大学名が {len(unregistered_list)} 件見つかりました。")
+        # else:
+            # print(f"未登録の大学名が {len(unregistered_list)} 件見つかりました。")
 
-        return unregistered_list # 正しい変数をリターン
+        return unregistered_list
             
     except Exception as e:
         print(f"データの取得中にエラーが発生しました: {e}")
         return []
+    
